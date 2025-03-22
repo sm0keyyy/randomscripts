@@ -8,8 +8,9 @@ while true; do
     echo "=== /dev/shm Folder Size Monitor (Updated: $(date '+%Y-%m-%d %H:%M:%S')) ==="
     echo ""
 
-    # Get all non-empty folders or files in /dev/shm
     folders=$(find /dev/shm -mindepth 1 -maxdepth 1 2>/dev/null)
+
+    empty_items=()
 
     if [ -z "$folders" ]; then
         echo "No folders or files in /dev/shm."
@@ -19,15 +20,46 @@ while true; do
             size_kb=$(du -sk "$folder" 2>/dev/null | awk '{print $1}')
             size_mb=$((size_kb / 1024))
 
-            # Update max size if current is larger
+            # Detect if empty
+            if [ -f "$folder" ] && [ ! -s "$folder" ]; then
+                empty_items+=("$folder")
+            elif [ -d "$folder" ] && [ -z "$(ls -A "$folder" 2>/dev/null)" ]; then
+                empty_items+=("$folder")
+            fi
+
+            # Update max size
             if [[ -z "${max_sizes[$folder]}" || "$size_kb" -gt "${max_sizes[$folder]}" ]]; then
                 max_sizes[$folder]=$size_kb
                 max_timestamps[$folder]=$(date '+%Y-%m-%d %H:%M:%S')
             fi
 
             max_mb=$((max_sizes[$folder] / 1024))
-            echo "Folder: $folder, Current Size: ${size_mb}MB, Peak: ${max_mb}MB at ${max_timestamps[$folder]}"
+            echo "Item: $folder, Current Size: ${size_mb}MB, Peak: ${max_mb}MB at ${max_timestamps[$folder]}"
         done
+    fi
+
+    # Show empty files/folders
+    if [ ${#empty_items[@]} -gt 0 ]; then
+        echo ""
+        echo "⚠️  Empty files/folders detected:"
+        for item in "${empty_items[@]}"; do
+            echo " - $item"
+        done
+
+        echo ""
+        read -p "Do you want to delete these empty items? Type 'yes' to confirm: " confirm
+        if [[ "$confirm" == "yes" ]]; then
+            for item in "${empty_items[@]}"; do
+                if rm -rf "$item" 2>/dev/null; then
+                    echo "Deleted: $item"
+                else
+                    echo "❌ Failed to delete: $item"
+                fi
+            done
+        else
+            echo "No files were deleted."
+        fi
+        sleep 3
     fi
 
     sleep 1
