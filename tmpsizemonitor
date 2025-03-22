@@ -1,0 +1,34 @@
+#!/bin/bash
+
+declare -A max_sizes
+declare -A max_timestamps
+
+while true; do
+    clear
+    echo "=== /dev/shm Folder Size Monitor (Updated: $(date '+%Y-%m-%d %H:%M:%S')) ==="
+    echo ""
+
+    # Get all non-empty folders or files in /dev/shm
+    folders=$(find /dev/shm -mindepth 1 -maxdepth 1 2>/dev/null)
+
+    if [ -z "$folders" ]; then
+        echo "No folders or files in /dev/shm."
+    else
+        for folder in $folders; do
+            # Get current size in kilobytes
+            size_kb=$(du -sk "$folder" 2>/dev/null | awk '{print $1}')
+            size_mb=$((size_kb / 1024))
+
+            # Update max size if current is larger
+            if [[ -z "${max_sizes[$folder]}" || "$size_kb" -gt "${max_sizes[$folder]}" ]]; then
+                max_sizes[$folder]=$size_kb
+                max_timestamps[$folder]=$(date '+%Y-%m-%d %H:%M:%S')
+            fi
+
+            max_mb=$((max_sizes[$folder] / 1024))
+            echo "Folder: $folder, Current Size: ${size_mb}MB, Peak: ${max_mb}MB at ${max_timestamps[$folder]}"
+        done
+    fi
+
+    sleep 1
+done
