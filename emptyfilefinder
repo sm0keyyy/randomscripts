@@ -1,0 +1,181 @@
+#!/bin/bash
+# Enhanced Empty File Finder for Unraid
+# This script identifies all 0 KB files in a specified directory,
+# categorizes them into TV or Movies, and exports the results to a log file.
+# Also includes an option to delete the empty files with confirmation.
+
+# Set source and destination paths
+SOURCE_DIR="/mnt/user/media/library"
+LOG_FILE="/mnt/user/storage/jake/emptyfiles.txt"
+DELETE_LIST="/mnt/user/storage/jake/emptyfiles_to_delete.txt"
+
+# Timestamp for the log file header
+TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
+
+# Create header for log file
+echo "=== EMPTY FILES REPORT ===" > "$LOG_FILE"
+echo "Generated: $TIMESTAMP" >> "$LOG_FILE"
+echo "Source: $SOURCE_DIR" >> "$LOG_FILE"
+echo "===============================" >> "$LOG_FILE"
+echo "" >> "$LOG_FILE"
+
+# Create temp files for sorting
+TV_TEMP=$(mktemp)
+MOVIE_TEMP=$(mktemp)
+OTHER_TEMP=$(mktemp)
+FULLPATH_TEMP=$(mktemp)
+
+# Find empty files and categorize them
+echo "Scanning for empty files in $SOURCE_DIR. This may take a while..."
+
+# Function to extract filename from path
+extract_filename() {
+    echo "$(basename "$1")"
+}
+
+# Find all empty files and process them
+find "$SOURCE_DIR" -type f -size 0 -not -path "*/\.*" | while read -r file; do
+    filename=$(extract_filename "$file")
+    
+    # Save the full path for potential deletion later
+    echo "$file" >> "$FULLPATH_TEMP"
+    
+    # Categorize based on path
+    if [[ "$file" == *"/tv/"* || "$file" == *"/series/"* || "$file" == *"/shows/"* ]]; then
+        echo "$filename" >> "$TV_TEMP"
+    elif [[ "$file" == *"/movies/"* || "$file" == *"/film/"* ]]; then
+        echo "$filename" >> "$MOVIE_TEMP"
+    else
+        echo "$filename" >> "$OTHER_TEMP"
+    fi
+done
+
+# Write categorized results to log file
+TV_COUNT=$(wc -l < "$TV_TEMP")
+MOVIE_COUNT=$(wc -l < "$MOVIE_TEMP")
+OTHER_COUNT=$(wc -l < "$OTHER_TEMP")
+TOTAL_COUNT=$((TV_COUNT + MOVIE_COUNT + OTHER_COUNT))
+
+# TV Shows Section
+echo "TV SHOWS ($TV_COUNT):" >> "$LOG_FILE"
+echo "===============================" >> "$LOG_FILE"
+if [ "$TV_COUNT" -gt 0 ]; then
+    cat "$TV_TEMP" >> "$LOG_FILE"
+else
+    echo "No empty TV show files found." >> "$LOG_FILE"
+fi
+echo "" >> "$LOG_FILE"
+
+# Movies Section
+echo "MOVIES ($MOVIE_COUNT):" >> "$LOG_FILE"
+echo "===============================" >> "$LOG_FILE"
+if [ "$MOVIE_COUNT" -gt 0 ]; then
+    cat "$MOVIE_TEMP" >> "$LOG_FILE"
+else
+    echo "No empty movie files found." >> "$LOG_FILE"
+fi
+echo "" >> "$LOG_FILE"
+
+# Other Files Section
+echo "OTHER FILES ($OTHER_COUNT):" >> "$LOG_FILE"
+echo "===============================" >> "$LOG_FILE"
+if [ "$OTHER_COUNT" -gt 0 ]; then
+    cat "$OTHER_TEMP" >> "$LOG_FILE"
+else
+    echo "No other empty files found." >> "$LOG_FILE"
+fi
+echo "" >> "$LOG_FILE"
+
+# Add summary to the end of the log file
+echo "===============================" >> "$LOG_FILE"
+echo "SUMMARY:" >> "$LOG_FILE"
+echo "TV Shows: $TV_COUNT empty files" >> "$LOG_FILE"
+echo "Movies: $MOVIE_COUNT empty files" >> "$LOG_FILE"
+echo "Other: $OTHER_COUNT empty files" >> "$LOG_FILE"
+echo "Total empty files found: $TOTAL_COUNT" >> "$LOG_FILE"
+echo "Scan completed: $(date "+%Y-%m-%d %H:%M:%S")" >> "$LOG_FILE"
+
+# Terminal output
+echo ""
+echo "Scan complete!"
+echo "==============================="
+echo "TV Shows: $TV_COUNT empty files"
+echo "Movies: $MOVIE_COUNT empty files"
+echo "Other: $OTHER_COUNT empty files"
+echo "Total: $TOTAL_COUNT empty files"
+echo "Results saved to $LOG_FILE"
+
+# Delete option section
+if [ "$TOTAL_COUNT" -gt 0 ]; then
+    echo ""
+    echo "Would you like to delete these empty files? (y/n)"
+    read -r DELETE_CONFIRM
+    
+    if [[ "$DELETE_CONFIRM" =~ ^[Yy]$ ]]; then
+        # Create a list of files to be deleted
+        cp "$FULLPATH_TEMP" "$DELETE_LIST"
+        
+        echo ""
+        echo "Preview of files to be deleted (showing first 5):"
+        head -n 5 "$DELETE_LIST"
+        
+        if [ "$TOTAL_COUNT" -gt 5 ]; then
+            echo "... and $((TOTAL_COUNT - 5)) more files"
+        fi
+        
+        echo ""
+        echo "FINAL CONFIRMATION: Delete $TOTAL_COUNT empty files? This cannot be undone! (type 'DELETE' to confirm)"
+        read -r FINAL_CONFIRM
+        
+        if [ "$FINAL_CONFIRM" = "DELETE" ]; then
+            echo "Deleting files..."
+            
+            # Log the deletion
+            echo "" >> "$LOG_FILE"
+            echo "DELETION LOG:" >> "$LOG_FILE"
+            echo "Files deleted on: $(date "+%Y-%m-%d %H:%M:%S")" >> "$LOG_FILE"
+            
+            # Count for tracking progress
+            DELETED=0
+            FAILED=0
+            
+            # Process each file
+            while IFS= read -r file_to_delete; do
+                if rm "$file_to_delete" 2>/dev/null; then
+                    echo "✓ Deleted: $file_to_delete" >> "$LOG_FILE"
+                    ((DELETED++))
+                else
+                    echo "✗ Failed to delete: $file_to_delete" >> "$LOG_FILE"
+                    ((FAILED++))
+                fi
+                
+                # Show progress
+                if [ "$((DELETED + FAILED))" -eq 1 ] || [ "$((DELETED + FAILED))" -eq "$((TOTAL_COUNT / 4))" ] || 
+                   [ "$((DELETED + FAILED))" -eq "$((TOTAL_COUNT / 2))" ] || [ "$((DELETED + FAILED))" -eq "$((TOTAL_COUNT * 3 / 4))" ] || 
+                   [ "$((DELETED + FAILED))" -eq "$TOTAL_COUNT" ]; then
+                    echo "Progress: $((DELETED + FAILED))/$TOTAL_COUNT files processed ($(( ((DELETED + FAILED) * 100) / TOTAL_COUNT ))%)"
+                fi
+            done < "$DELETE_LIST"
+            
+            echo "" >> "$LOG_FILE"
+            echo "Deletion Summary:" >> "$LOG_FILE"
+            echo "Successfully deleted: $DELETED files" >> "$LOG_FILE"
+            echo "Failed to delete: $FAILED files" >> "$LOG_FILE"
+            
+            echo ""
+            echo "Deletion complete!"
+            echo "Successfully deleted: $DELETED files"
+            echo "Failed to delete: $FAILED files"
+            echo "Full deletion log added to $LOG_FILE"
+        else
+            echo "Deletion cancelled - no files were deleted."
+        fi
+    else
+        echo "Deletion cancelled - no files were deleted."
+    fi
+fi
+
+# Clean up temp files
+rm "$TV_TEMP" "$MOVIE_TEMP" "$OTHER_TEMP" "$FULLPATH_TEMP"
+echo "Temporary files cleaned up."
+echo "Done!"
