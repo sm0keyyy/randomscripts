@@ -1,33 +1,103 @@
 #!/bin/bash
+# Monitors /dev/shm, tracks peak sizes, optionally logs to file and shows PIDs.
+# Usage: ./tmpsizemonitor [--log <logfile>] [--show-pid]
+
+LOG_FILE=""
+SHOW_PID=false
+
+# --- Argument Parsing ---
+TEMP=$(getopt -o '' --long log:,show-pid -n 'tmpsizemonitor' -- "$@")
+if [ $? != 0 ] ; then echo "Usage: $0 [--log <logfile>] [--show-pid]" >&2 ; exit 1 ; fi
+eval set -- "$TEMP"
+
+while true; do
+  case "$1" in
+    --log ) LOG_FILE="$2"; shift 2 ;;
+    --show-pid ) SHOW_PID=true; shift ;;
+    -- ) shift; break ;;
+    * ) break ;;
+  esac
+done
+
+# --- PID Feature Check ---
+if [ "$SHOW_PID" = true ]; then
+    if ! command -v lsof &> /dev/null; then
+        echo "Warning: 'lsof' command not found. Cannot show PIDs." >&2
+        SHOW_PID=false # Disable PID feature if lsof is missing
+    fi
+fi
+
+# --- Logging Setup ---
+if [ -n "$LOG_FILE" ]; then
+    # Attempt to create/append to log file to check permissions early
+    if ! touch "$LOG_FILE" 2>/dev/null; then
+        echo "Error: Cannot write to log file '$LOG_FILE'. Check path and permissions." >&2
+        exit 1
+    fi
+    echo "=== Monitor Started: $(date '+%Y-%m-%d %H:%M:%S') ===" >> "$LOG_FILE"
+    echo "Logging enabled to: $LOG_FILE"
+fi
+echo "Show PIDs: $SHOW_PID"
+echo "---"
+
 
 declare -A max_sizes
 declare -A max_timestamps
 
 while true; do
+    TIMESTAMP_NOW=$(date '+%Y-%m-%d %H:%M:%S')
     clear
-    echo "=== /dev/shm Folder Size Monitor (Updated: $(date '+%Y-%m-%d %H:%M:%S')) ==="
-    echo ""
+    echo "=== /dev/shm Monitor (Updated: $TIMESTAMP_NOW) ==="
+    echo "Log File: ${LOG_FILE:-N/A} | Show PIDs: $SHOW_PID"
+    echo "-----------------------------------------------------"
 
-    # Get all non-empty folders or files in /dev/shm
-    folders=$(find /dev/shm -mindepth 1 -maxdepth 1 2>/dev/null)
+    # Get all top-level folders or files in /dev/shm
+    mapfile -t items < <(find /dev/shm -mindepth 1 -maxdepth 1 2>/dev/null)
 
-    if [ -z "$folders" ]; then
-        echo "No folders or files in /dev/shm."
+    if [ ${#items[@]} -eq 0 ]; then
+        echo "No items found in /dev/shm."
+        log_line="$TIMESTAMP_NOW | No items found in /dev/shm."
     else
-        for folder in $folders; do
+        log_line="" # Reset log line for this iteration
+        for item in "${items[@]}"; do
             # Get current size in kilobytes
-            size_kb=$(du -sk "$folder" 2>/dev/null | awk '{print $1}')
+            size_kb=$(du -sk "$item" 2>/dev/null | awk '{print $1}')
             size_mb=$((size_kb / 1024))
 
-            # Update max size if current is larger
-            if [[ -z "${max_sizes[$folder]}" || "$size_kb" -gt "${max_sizes[$folder]}" ]]; then
-                max_sizes[$folder]=$size_kb
-                max_timestamps[$folder]=$(date '+%Y-%m-%d %H:%M:%S')
+            # Update max size if current is larger or not set
+            if [[ -z "${max_sizes[$item]}" || "$size_kb" -gt "${max_sizes[$item]}" ]]; then
+                max_sizes[$item]=$size_kb
+                max_timestamps[$item]=$TIMESTAMP_NOW
             fi
 
-            max_mb=$((max_sizes[$folder] / 1024))
-            echo "Folder: $folder, Current Size: ${size_mb}MB, Peak: ${max_mb}MB at ${max_timestamps[$folder]}"
+            max_mb=$((max_sizes[$item] / 1024))
+
+            # --- PID Lookup (if enabled) ---
+            pid_info=""
+            if [ "$SHOW_PID" = true ]; then
+                # Use lsof to find PIDs associated with the item (+D searches directory recursively)
+                # Extract unique PIDs (awk), sort numerically (sort), join with commas (paste)
+                pids=$(lsof +D "$item" 2>/dev/null | awk 'NR>1 {print $2}' | sort -un | paste -sd,)
+                if [ -n "$pids" ]; then
+                    pid_info=" | PIDs: [$pids]"
+                fi
+            fi
+
+            # --- Construct Output ---
+            output_line="Item: $item | Current: ${size_mb}MB | Peak: ${max_mb}MB at ${max_timestamps[$item]}${pid_info}"
+            echo "$output_line"
+
+            # Append to log line for batch logging
+            if [ -n "$LOG_FILE" ]; then
+                 log_line+="$TIMESTAMP_NOW | $output_line\n"
+            fi
         done
+    fi
+
+    # --- Log to File (if enabled) ---
+    if [ -n "$LOG_FILE" ] && [ -n "$log_line" ]; then
+        # Use printf for better handling of newlines
+        printf "%b" "$log_line" >> "$LOG_FILE"
     fi
 
     sleep 1

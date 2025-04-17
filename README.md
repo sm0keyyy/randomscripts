@@ -10,19 +10,34 @@ A Bash script that continuously monitors the size of top-level files and folders
 
 **Features:**
 
-*   Displays the current size (in MB) for each item.
-*   Tracks the peak size (in MB) reached and the timestamp when it occurred.
+*   Displays the current size (in MB) for each top-level item in `/dev/shm`.
+*   Tracks the peak size (in MB) reached and the timestamp when it occurred for each item.
 *   Refreshes the display every second.
 *   Handles cases where `/dev/shm` is empty.
+*   **Optional:** Logs timestamped size information to a specified file (`--log <logfile>`).
+*   **Optional:** Attempts to show associated Process IDs (PIDs) using `lsof` (`--show-pid`). Requires `lsof` to be installed.
 
 **Usage:**
 
 ```bash
+./tmpsizemonitor [--log <logfile>] [--show-pid]
+
+# Examples:
+# Run normally
 ./tmpsizemonitor
-# or
-bash tmpsizemonitor
+
+# Run and log output to /var/log/shm_monitor.log
+./tmpsizemonitor --log /var/log/shm_monitor.log
+
+# Run and attempt to show PIDs
+./tmpsizemonitor --show-pid
+
+# Run with logging and PID display
+./tmpsizemonitor --log /tmp/shm.log --show-pid
 ```
 *(Ensure the script has execute permissions: `chmod +x tmpsizemonitor`)*
+*(Ensure `lsof` is installed if using `--show-pid`)*
+*(Ensure write permissions for the log file path if using `--log`)*
 
 ---
 
