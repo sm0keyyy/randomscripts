@@ -1,13 +1,34 @@
 #!/bin/bash
 # Enhanced Empty File Finder for Unraid
 # This script identifies all 0 KB files in a specified directory,
-# categorizes them into TV or Movies, and exports the results to a log file.
+# categorizes them based on path keywords (e.g., tv, movies), and exports the results to a log file.
 # Also includes an option to delete the empty files with confirmation.
+# Usage: ./emptyfilefinder <source_directory> <log_directory>
 
-# Set source and destination paths
-SOURCE_DIR="/mnt/user/media/library"
-LOG_FILE="/mnt/user/storage/jake/emptyfiles.txt"
-DELETE_LIST="/mnt/user/storage/jake/emptyfiles_to_delete.txt"
+# Check for required arguments
+if [ "$#" -ne 2 ]; then
+    echo "Usage: $0 <source_directory> <log_directory>"
+    exit 1
+fi
+
+# Set source and log directories from arguments
+SOURCE_DIR="$1"
+LOG_DIR="$2"
+
+# Validate directories
+if [ ! -d "$SOURCE_DIR" ]; then
+    echo "Error: Source directory '$SOURCE_DIR' not found."
+    exit 1
+fi
+
+if [ ! -d "$LOG_DIR" ]; then
+    echo "Error: Log directory '$LOG_DIR' not found. Please create it."
+    exit 1
+fi
+
+# Define log file paths based on the log directory
+LOG_FILE="$LOG_DIR/emptyfiles_report.txt"
+DELETE_LIST="$LOG_DIR/emptyfiles_to_delete.txt"
 
 # Timestamp for the log file header
 TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
@@ -26,7 +47,7 @@ OTHER_TEMP=$(mktemp)
 FULLPATH_TEMP=$(mktemp)
 
 # Find empty files and categorize them
-echo "Scanning for empty files in $SOURCE_DIR. This may take a while..."
+echo "Scanning for empty files in '$SOURCE_DIR'. This may take a while..."
 
 # Function to extract filename from path
 extract_filename() {
@@ -103,7 +124,7 @@ echo "TV Shows: $TV_COUNT empty files"
 echo "Movies: $MOVIE_COUNT empty files"
 echo "Other: $OTHER_COUNT empty files"
 echo "Total: $TOTAL_COUNT empty files"
-echo "Results saved to $LOG_FILE"
+echo "Results saved to '$LOG_FILE'"
 
 # Delete option section
 if [ "$TOTAL_COUNT" -gt 0 ]; then
@@ -166,10 +187,10 @@ if [ "$TOTAL_COUNT" -gt 0 ]; then
             echo "Deletion complete!"
             echo "Successfully deleted: $DELETED files"
             echo "Failed to delete: $FAILED files"
-            echo "Full deletion log added to $LOG_FILE"
-        else
-            echo "Deletion cancelled - no files were deleted."
-        fi
+            echo "Full deletion log added to '$LOG_FILE'"
+                    else
+                        echo "Deletion cancelled - no files were deleted."
+                    fi
     else
         echo "Deletion cancelled - no files were deleted."
     fi

@@ -28,28 +28,26 @@ bash tmpsizemonitor
 
 ### `emptyfilefinder`
 
-A Bash script designed to find and optionally delete 0 KB files within a specified directory structure, potentially tailored for Unraid systems.
+A Bash script designed to find and optionally delete 0 KB files within a specified directory structure. It takes the source directory to scan and a directory for log files as command-line arguments.
 
 **Features:**
 
-*   Scans a source directory (default: `/mnt/user/media/library`) for files with a size of 0 KB, ignoring hidden files.
+*   Scans a user-specified source directory for files with a size of 0 KB, ignoring hidden files.
 *   Categorizes found files into "TV Shows", "Movies", or "Other" based on keywords in their path (e.g., `/tv/`, `/movies/`).
-*   Generates a report listing the filenames in each category and saves it to a log file (default: `/mnt/user/storage/jake/emptyfiles.txt`).
+*   Generates a report (`emptyfiles_report.txt`) listing the filenames in each category within a user-specified log directory.
 *   Provides a summary count of empty files found in each category.
 *   Offers an interactive option to delete the found empty files.
+    *   Creates a temporary list (`emptyfiles_to_delete.txt`) in the log directory.
     *   Requires double confirmation before deletion proceeds.
-    *   Logs deletion successes and failures to the main log file.
+    *   Logs deletion successes and failures to the main report file.
     *   Shows deletion progress in the terminal.
-
-**Configuration:**
-
-*   The `SOURCE_DIR` and `LOG_FILE` paths can be modified directly within the script if needed.
 
 **Usage:**
 
 ```bash
-./emptyfilefinder
-# or
-bash emptyfilefinder
+./emptyfilefinder <source_directory> <log_directory>
+# Example:
+./emptyfilefinder /path/to/your/media /path/to/your/logs
 ```
 *(Ensure the script has execute permissions: `chmod +x emptyfilefinder`)*
+*(Ensure the log directory exists before running)*
