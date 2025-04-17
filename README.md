@@ -36,18 +36,24 @@ A Bash script designed to find and optionally delete 0 KB files within a specifi
 *   Categorizes found files into "TV Shows", "Movies", or "Other" based on keywords in their path (e.g., `/tv/`, `/movies/`).
 *   Generates a report (`emptyfiles_report.txt`) listing the filenames in each category within a user-specified log directory.
 *   Provides a summary count of empty files found in each category.
-*   Offers an interactive option to delete the found empty files.
+*   Includes a `--dry-run` option to simulate deletion without removing files.
+*   Offers an interactive option to delete the found empty files (when not in dry run mode).
     *   Creates a temporary list (`emptyfiles_to_delete.txt`) in the log directory.
     *   Requires double confirmation before deletion proceeds.
-    *   Logs deletion successes and failures to the main report file.
+    *   Logs deletion successes and failures (or simulated deletions in dry run) to the main report file.
     *   Shows deletion progress in the terminal.
 
 **Usage:**
 
 ```bash
-./emptyfilefinder <source_directory> <log_directory>
-# Example:
+./emptyfilefinder [--dry-run] <source_directory> <log_directory>
+
+# Examples:
+# Scan and prompt for deletion
 ./emptyfilefinder /path/to/your/media /path/to/your/logs
+
+# Perform a dry run (list files that would be deleted)
+./emptyfilefinder --dry-run /path/to/your/media /path/to/your/logs
 ```
 *(Ensure the script has execute permissions: `chmod +x emptyfilefinder`)*
 *(Ensure the log directory exists before running)*

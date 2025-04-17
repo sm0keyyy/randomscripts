@@ -2,12 +2,28 @@
 # Enhanced Empty File Finder for Unraid
 # This script identifies all 0 KB files in a specified directory,
 # categorizes them based on path keywords (e.g., tv, movies), and exports the results to a log file.
-# Also includes an option to delete the empty files with confirmation.
-# Usage: ./emptyfilefinder <source_directory> <log_directory>
+# Also includes an option to delete the empty files with confirmation, and a dry-run mode.
+# Usage: ./emptyfilefinder [--dry-run] <source_directory> <log_directory>
 
-# Check for required arguments
+# Default dry_run to false
+DRY_RUN=false
+
+# Parse options
+TEMP=$(getopt -o '' --long dry-run -n 'emptyfilefinder' -- "$@")
+if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
+eval set -- "$TEMP"
+
+while true; do
+  case "$1" in
+    --dry-run ) DRY_RUN=true; shift ;;
+    -- ) shift; break ;;
+    * ) break ;;
+  esac
+done
+
+# Check for required positional arguments
 if [ "$#" -ne 2 ]; then
-    echo "Usage: $0 <source_directory> <log_directory>"
+    echo "Usage: $0 [--dry-run] <source_directory> <log_directory>"
     exit 1
 fi
 
@@ -129,10 +145,18 @@ echo "Results saved to '$LOG_FILE'"
 # Delete option section
 if [ "$TOTAL_COUNT" -gt 0 ]; then
     echo ""
-    echo "Would you like to delete these empty files? (y/n)"
-    read -r DELETE_CONFIRM
+    if [ "$DRY_RUN" = true ]; then
+        echo ""
+        echo "--- DRY RUN MODE ---"
+        echo "The following files would be listed for deletion:"
+        cat "$FULLPATH_TEMP"
+        echo "--- END DRY RUN ---"
+    else
+        echo ""
+        echo "Would you like to delete these empty files? (y/n)"
+        read -r DELETE_CONFIRM
     
-    if [[ "$DELETE_CONFIRM" =~ ^[Yy]$ ]]; then
+        if [[ "$DELETE_CONFIRM" =~ ^[Yy]$ ]]; then
         # Create a list of files to be deleted
         cp "$FULLPATH_TEMP" "$DELETE_LIST"
         
@@ -162,13 +186,23 @@ if [ "$TOTAL_COUNT" -gt 0 ]; then
             
             # Process each file
             while IFS= read -r file_to_delete; do
-                if rm "$file_to_delete" 2>/dev/null; then
-                    echo "✓ Deleted: $file_to_delete" >> "$LOG_FILE"
-                    ((DELETED++))
+                # --- Deletion Logic ---
+                if [ "$DRY_RUN" = true ]; then
+                    # Dry Run: Just log what would happen
+                    echo "[DRY RUN] Would delete: $file_to_delete" >> "$LOG_FILE"
+                    echo "[DRY RUN] Would delete: $file_to_delete" # Also print to console for dry run visibility
+                    ((DELETED++)) # Count as "would be deleted"
                 else
-                    echo "✗ Failed to delete: $file_to_delete" >> "$LOG_FILE"
-                    ((FAILED++))
+                    # Actual Deletion
+                    if rm "$file_to_delete" 2>/dev/null; then
+                        echo "✓ Deleted: $file_to_delete" >> "$LOG_FILE"
+                        ((DELETED++))
+                    else
+                        echo "✗ Failed to delete: $file_to_delete" >> "$LOG_FILE"
+                        ((FAILED++))
+                    fi
                 fi
+                # --- End Deletion Logic ---
                 
                 # Show progress
                 if [ "$((DELETED + FAILED))" -eq 1 ] || [ "$((DELETED + FAILED))" -eq "$((TOTAL_COUNT / 4))" ] || 
@@ -180,21 +214,33 @@ if [ "$TOTAL_COUNT" -gt 0 ]; then
             
             echo "" >> "$LOG_FILE"
             echo "Deletion Summary:" >> "$LOG_FILE"
-            echo "Successfully deleted: $DELETED files" >> "$LOG_FILE"
-            echo "Failed to delete: $FAILED files" >> "$LOG_FILE"
+            if [ "$DRY_RUN" = true ]; then
+                echo "[DRY RUN] Files that would be deleted: $DELETED" >> "$LOG_FILE"
+            else
+                echo "Successfully deleted: $DELETED files" >> "$LOG_FILE"
+                echo "Failed to delete: $FAILED files" >> "$LOG_FILE"
+            fi
             
             echo ""
-            echo "Deletion complete!"
-            echo "Successfully deleted: $DELETED files"
-            echo "Failed to delete: $FAILED files"
-            echo "Full deletion log added to '$LOG_FILE'"
-                    else
-                        echo "Deletion cancelled - no files were deleted."
-                    fi
-    else
-        echo "Deletion cancelled - no files were deleted."
-    fi
-fi
+            if [ "$DRY_RUN" = true ]; then
+                echo "--- DRY RUN COMPLETE ---"
+                echo "Files that would be deleted: $DELETED"
+                echo "No files were actually deleted."
+                echo "Dry run details added to '$LOG_FILE'"
+            else
+                echo "Deletion complete!"
+                echo "Successfully deleted: $DELETED files"
+                echo "Failed to delete: $FAILED files"
+                echo "Full deletion log added to '$LOG_FILE'"
+            fi
+            else # Corresponds to: if [ "$FINAL_CONFIRM" = "DELETE" ]; then (line 175)
+                echo "Deletion cancelled - no files were deleted."
+            fi # Closes: if [ "$FINAL_CONFIRM" = "DELETE" ]; then
+        else # Corresponds to: if [[ "$DELETE_CONFIRM" =~ ^[Yy]$ ]]; then (line 159)
+             echo "Deletion cancelled - no files were deleted."
+        fi # Closes: if [[ "$DELETE_CONFIRM" =~ ^[Yy]$ ]]; then
+    fi # Closes: if [ "$DRY_RUN" = true ]; then (line 148)
+fi # Closes: if [ "$TOTAL_COUNT" -gt 0 ]; then (line 146)
 
 # Clean up temp files
 rm "$TV_TEMP" "$MOVIE_TEMP" "$OTHER_TEMP" "$FULLPATH_TEMP"
