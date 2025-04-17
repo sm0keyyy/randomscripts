@@ -15,7 +15,7 @@ A Bash script that continuously monitors the size of top-level files and folders
 *   Refreshes the display every second.
 *   Handles cases where `/dev/shm` is empty.
 *   **Optional:** Logs timestamped size information to a specified file (`--log <logfile>`).
-*   **Optional:** Attempts to show associated Process IDs (PIDs) using `lsof` (`--show-pid`). Requires `lsof` to be installed.
+*   **Optional:** Attempts to show associated Process IDs (PIDs) using `lsof` (`--show-pid`). Requires `lsof` to be installed (feature disabled with a warning if missing).
 
 **Usage:**
 
