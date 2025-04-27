@@ -1,0 +1,8 @@
+for f in *.zip; do 
+  # Get the filename without the .zip extension
+  dirname="${f%.zip}" 
+  
+  # Create the directory, and only if successful, unzip into it
+  mkdir "$dirname" && unzip "$f" -d "$dirname" 
+
+done
